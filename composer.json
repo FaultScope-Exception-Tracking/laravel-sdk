@@ -4,6 +4,18 @@
     "version": "1.3.0",
     "type": "library",
     "license": "MIT",
+    "keywords": ["laravel", "skywatch", "exceptions", "monitoring", "error-tracking"],
+    "homepage": "https://github.com/Skywatch-Exception-Tracking/laravel",
+    "support": {
+        "issues": "https://github.com/Skywatch-Exception-Tracking/laravel/issues",
+        "source": "https://github.com/Skywatch-Exception-Tracking/laravel"
+    },
+    "authors": [
+        {
+            "name": "Skywatch",
+            "homepage": "https://github.com/Skywatch-Exception-Tracking"
+        }
+    ],
     "autoload": {
         "psr-4": {
             "Skywatch\\Laravel\\": "src/"

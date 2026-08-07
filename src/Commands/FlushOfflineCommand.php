@@ -1,20 +1,20 @@
 <?php
 
-namespace Skywatch\Laravel\Commands;
+namespace FaultScope\Laravel\Commands;
 
 use GuzzleHttp\Client;
 use Illuminate\Console\Command;
-use Skywatch\Laravel\SkywatchClient;
+use FaultScope\Laravel\FaultScopeClient;
 
 class FlushOfflineCommand extends Command
 {
-    protected $signature = 'skywatch:flush-offline';
+    protected $signature = 'faultscope:flush-offline';
 
-    protected $description = 'Flush offline Skywatch queue';
+    protected $description = 'Flush offline FaultScope queue';
 
     public function handle()
     {
-        $path = storage_path('skywatch/offline');
+        $path = storage_path('faultscope/offline');
         if (! is_dir($path)) {
             $this->info('No offline queue directory found.');
 
@@ -28,8 +28,8 @@ class FlushOfflineCommand extends Command
             return;
         }
 
-        $dsn = config('skywatch.dsn') ?: env('SKYWATCH_DSN', env('EXCEPTION_TRACKER_DSN'));
-        $key = config('skywatch.key') ?: env('SKYWATCH_KEY', env('EXCEPTION_TRACKER_KEY'));
+        $dsn = config('faultscope.dsn') ?: env('FAULTSCOPE_DSN', env('FAULTSCOPE_DSN'));
+        $key = config('faultscope.key') ?: env('FAULTSCOPE_KEY', env('FAULTSCOPE_KEY'));
 
         if (! $dsn || ! $key) {
             $this->error('DSN or Key not configured.');
@@ -43,7 +43,7 @@ class FlushOfflineCommand extends Command
                 'Authorization' => 'Bearer '.$key,
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
-                'X-SDK-Version' => 'laravel/'.SkywatchClient::SDK_VERSION,
+                'X-SDK-Version' => 'laravel/'.FaultScopeClient::SDK_VERSION,
             ],
         ]);
 

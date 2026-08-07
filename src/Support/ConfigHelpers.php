@@ -1,6 +1,6 @@
 <?php
 
-namespace Skywatch\Laravel\Support;
+namespace FaultScope\Laravel\Support;
 
 class ConfigHelpers
 {

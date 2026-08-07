@@ -1,9 +1,9 @@
 <?php
 
-namespace Skywatch\Laravel\Http\Middleware;
+namespace FaultScope\Laravel\Http\Middleware;
 
 use Closure;
-use Skywatch\Laravel\SkywatchClient;
+use FaultScope\Laravel\FaultScopeClient;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -15,7 +15,7 @@ class TraceSpanMiddleware
 
     public function handle(Request $request, Closure $next): Response
     {
-        if (! config('skywatch.tracing.enabled', true)) {
+        if (! config('faultscope.tracing.enabled', true)) {
             return $next($request);
         }
 
@@ -35,7 +35,7 @@ class TraceSpanMiddleware
         }
 
         try {
-            app(SkywatchClient::class)->flushSpans(
+            app(FaultScopeClient::class)->flushSpans(
                 self::$traceId,
                 (microtime(true) - self::$startedAt) * 1000,
                 $request,

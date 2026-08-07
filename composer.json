@@ -1,24 +1,24 @@
 {
-    "name": "skywatch/laravel",
-    "description": "Laravel integration package for Skywatch monitoring hub",
+    "name": "faultscope/laravel",
+    "description": "Laravel integration package for FaultScope monitoring hub",
     "version": "1.3.0",
     "type": "library",
     "license": "MIT",
-    "keywords": ["laravel", "skywatch", "exceptions", "monitoring", "error-tracking"],
-    "homepage": "https://github.com/Skywatch-Exception-Tracking/laravel",
+    "keywords": ["laravel", "faultscope", "exceptions", "monitoring", "error-tracking"],
+    "homepage": "https://github.com/FaultScope-Exception-Tracking/laravel",
     "support": {
-        "issues": "https://github.com/Skywatch-Exception-Tracking/laravel/issues",
-        "source": "https://github.com/Skywatch-Exception-Tracking/laravel"
+        "issues": "https://github.com/FaultScope-Exception-Tracking/laravel/issues",
+        "source": "https://github.com/FaultScope-Exception-Tracking/laravel"
     },
     "authors": [
         {
-            "name": "Skywatch",
-            "homepage": "https://github.com/Skywatch-Exception-Tracking"
+            "name": "FaultScope",
+            "homepage": "https://github.com/FaultScope-Exception-Tracking"
         }
     ],
     "autoload": {
         "psr-4": {
-            "Skywatch\\Laravel\\": "src/"
+            "FaultScope\\Laravel\\": "src/"
         }
     },
     "require": {
@@ -29,7 +29,7 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Skywatch\\Laravel\\SkywatchServiceProvider"
+                "FaultScope\\Laravel\\FaultScopeServiceProvider"
             ]
         }
     }

@@ -1,6 +1,6 @@
 <?php
 
-namespace Skywatch\Laravel;
+namespace FaultScope\Laravel;
 
 use GuzzleHttp\Client;
 use ReflectionFunction;
@@ -8,7 +8,7 @@ use ReflectionMethod;
 use SplFileObject;
 use Throwable;
 
-class SkywatchClient
+class FaultScopeClient
 {
     public const SDK_VERSION = '1.3.0';
 
@@ -29,9 +29,9 @@ class SkywatchClient
 
     public function __construct()
     {
-        $this->dsn = config('skywatch.dsn') ?: env('SKYWATCH_DSN', env('EXCEPTION_TRACKER_DSN'));
-        $this->key = config('skywatch.key') ?: env('SKYWATCH_KEY', env('EXCEPTION_TRACKER_KEY'));
-        $this->enabled = (bool) (config('skywatch.enabled') ?? env('SKYWATCH_ENABLED', env('EXCEPTION_TRACKER_ENABLED', true)));
+        $this->dsn = config('faultscope.dsn') ?: env('FAULTSCOPE_DSN', env('FAULTSCOPE_DSN'));
+        $this->key = config('faultscope.key') ?: env('FAULTSCOPE_KEY', env('FAULTSCOPE_KEY'));
+        $this->enabled = (bool) (config('faultscope.enabled') ?? env('FAULTSCOPE_ENABLED', env('FAULTSCOPE_ENABLED', true)));
 
         $this->client = new Client([
             'timeout' => 3.0,
@@ -49,7 +49,7 @@ class SkywatchClient
      */
     public static function recordBreadcrumb(string $category, string $message, string $level = 'info', array $metadata = []): void
     {
-        $limit = config('skywatch.breadcrumbs.limit', 100);
+        $limit = config('faultscope.breadcrumbs.limit', 100);
         self::$breadcrumbs[] = [
             'category' => $category,
             'message' => $message,
@@ -80,13 +80,13 @@ class SkywatchClient
             return;
         }
 
-        foreach (config('skywatch.ignored_exceptions', []) as $ignoredClass) {
+        foreach (config('faultscope.ignored_exceptions', []) as $ignoredClass) {
             if ($e instanceof $ignoredClass) {
                 return;
             }
         }
 
-        $sampleRate = (float) config('skywatch.sample_rate', 1.0);
+        $sampleRate = (float) config('faultscope.sample_rate', 1.0);
         if ($sampleRate < 1.0 && (mt_rand() / mt_getrandmax()) > $sampleRate) {
             return;
         }
@@ -114,7 +114,7 @@ class SkywatchClient
                 'ip_address' => $this->resolveIpAddress($isConsole),
                 'user_agent' => $isConsole ? 'CLI' : $this->safeRequest(fn () => request()->userAgent(), 'CLI'),
                 'timestamp' => microtime(true),
-                'release' => config('skywatch.release') ?: $this->getGitCommit(),
+                'release' => config('faultscope.release') ?: $this->getGitCommit(),
                 'git_commit' => $this->getGitCommit(),
                 'git_branch' => $this->getGitBranch(),
                 'sdk_version' => 'laravel/'.self::SDK_VERSION,
@@ -146,7 +146,7 @@ class SkywatchClient
 
             $payload = $this->sanitizePayload($payload);
 
-            $beforeSend = config('skywatch.before_send');
+            $beforeSend = config('faultscope.before_send');
             if (is_callable($beforeSend)) {
                 $payload = $beforeSend($payload);
                 if ($payload === null) {
@@ -158,7 +158,7 @@ class SkywatchClient
                 'json' => $payload,
             ]);
         } catch (Throwable $err) {
-            if ($payload && config('skywatch.offline_queue', true)) {
+            if ($payload && config('faultscope.offline_queue', true)) {
                 $this->storeOffline($payload);
             }
         }
@@ -175,7 +175,7 @@ class SkywatchClient
 
     protected function resolveIpAddress(bool $isConsole): string
     {
-        if (! config('skywatch.send_default_pii', false)) {
+        if (! config('faultscope.send_default_pii', false)) {
             return '[REDACTED]';
         }
 
@@ -192,7 +192,7 @@ class SkywatchClient
             'id' => $this->safeRequest(fn () => auth()->id()),
         ], self::$userContext);
 
-        if (! config('skywatch.send_default_pii', false)) {
+        if (! config('faultscope.send_default_pii', false)) {
             unset($user['email'], $user['name'], $user['username']);
         }
 
@@ -423,7 +423,7 @@ class SkywatchClient
             'env' => app()->environment(),
             'php' => PHP_VERSION,
             'laravel' => app()->version(),
-            'release' => config('skywatch.release') ?: $this->getGitCommit(),
+            'release' => config('faultscope.release') ?: $this->getGitCommit(),
             'sdk' => 'laravel/'.self::SDK_VERSION,
         ]);
     }
@@ -467,7 +467,7 @@ class SkywatchClient
     protected function storeOffline(array $payload): void
     {
         try {
-            $path = storage_path('skywatch/offline');
+            $path = storage_path('faultscope/offline');
             if (! is_dir($path)) {
                 mkdir($path, 0755, true);
             }
@@ -523,7 +523,7 @@ class SkywatchClient
                 'function' => $frame['function'] ?? null,
                 'type' => $frame['type'] ?? null,
                 'is_vendor' => $this->isVendorPath($frame['file']),
-                'code_snippet' => config('skywatch.code_context.enabled', true)
+                'code_snippet' => config('faultscope.code_context.enabled', true)
                     ? $this->getCodeSnippet($frame['file'], $frame['line'] ?? 0)
                     : [],
             ];
@@ -540,7 +540,7 @@ class SkywatchClient
         }
 
         try {
-            $padding = config('skywatch.code_context.padding', 15);
+            $padding = config('faultscope.code_context.padding', 15);
             $fileObj = new SplFileObject($file);
             $start = max(1, $line - $padding);
             $end = $line + $padding;
@@ -564,13 +564,13 @@ class SkywatchClient
      */
     protected function collectLocalVariables(Throwable $e): array
     {
-        if (! config('skywatch.local_variables.enabled', true)) {
+        if (! config('faultscope.local_variables.enabled', true)) {
             return [];
         }
 
         $variableMap = [];
         $frames = $e->getTrace();
-        $depthLimit = config('skywatch.local_variables.max_depth', 3);
+        $depthLimit = config('faultscope.local_variables.max_depth', 3);
         $framesToInspect = array_slice($frames, 0, $depthLimit);
 
         // stack_frames[0] is the crash site; trace frame args align from index 1 onward.
@@ -611,7 +611,7 @@ class SkywatchClient
 
     protected function exportVariable($value, int $depth = 0): array
     {
-        $maxDepth = config('skywatch.local_variables.max_depth', 3);
+        $maxDepth = config('faultscope.local_variables.max_depth', 3);
         if ($depth > $maxDepth) {
             return ['type' => 'recursion', 'value' => '[MAX DEPTH REACHED]'];
         }
@@ -635,7 +635,7 @@ class SkywatchClient
         if (is_array($value)) {
             $formatted = [];
             $count = count($value);
-            $limit = config('skywatch.local_variables.max_array_items', 10);
+            $limit = config('faultscope.local_variables.max_array_items', 10);
             $index = 0;
             foreach ($value as $k => $v) {
                 if ($index++ >= $limit) {
@@ -707,7 +707,7 @@ class SkywatchClient
                 $user = auth()->user();
                 $auth = [
                     'id' => $user->getKey(),
-                    'email' => config('skywatch.send_default_pii', false) ? ($user->email ?? null) : '[REDACTED]',
+                    'email' => config('faultscope.send_default_pii', false) ? ($user->email ?? null) : '[REDACTED]',
                     'guard' => auth()->getDefaultDriver(),
                 ];
             }
@@ -782,7 +782,7 @@ class SkywatchClient
 
     protected function sanitizePayload(array $payload): array
     {
-        $blacklist = config('skywatch.security.blacklist', [
+        $blacklist = config('faultscope.security.blacklist', [
             'password', 'password_confirmation', 'token', 'key', 'secret',
             'authorization', 'cookie', 'xsrf-token', 'xsrf_token', 'api_key', 'apikey',
             'laravel_session', 'remember_web', 'session',
@@ -860,7 +860,7 @@ class SkywatchClient
             return;
         }
 
-        if (! config('skywatch.tracing.enabled', true)) {
+        if (! config('faultscope.tracing.enabled', true)) {
             return;
         }
 

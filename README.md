@@ -1,6 +1,6 @@
-# Skywatch Laravel SDK
+# FaultScope Laravel SDK
 
-Official Laravel package for sending exceptions and telemetry to [Skywatch](https://github.com/Skywatch-Exception-Tracking/Skywatch).
+Official Laravel package for sending exceptions and telemetry to [FaultScope](https://github.com/FaultScope-Exception-Tracking/FaultScope).
 
 ## Requirements
 
@@ -10,7 +10,7 @@ Official Laravel package for sending exceptions and telemetry to [Skywatch](http
 ## Install
 
 ```bash
-composer require skywatch/laravel
+composer require faultscope/laravel
 ```
 
 ## Configure
@@ -18,21 +18,21 @@ composer require skywatch/laravel
 Add to your `.env`:
 
 ```env
-SKYWATCH_ENABLED=true
-SKYWATCH_DSN=https://your-hub.example.com/api/ingest
-SKYWATCH_KEY=et_ingest_your_key_here
+FAULTSCOPE_ENABLED=true
+FAULTSCOPE_DSN=https://your-hub.example.com/api/ingest
+FAULTSCOPE_KEY=et_ingest_your_key_here
 ```
 
 Optional: publish config
 
 ```bash
-php artisan vendor:publish --tag=skywatch-config
+php artisan vendor:publish --tag=faultscope-config
 ```
 
 ## Verify
 
 ```bash
-php artisan skywatch:ping
+php artisan faultscope:ping
 ```
 
 ## Features

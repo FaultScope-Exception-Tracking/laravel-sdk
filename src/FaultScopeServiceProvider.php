@@ -1,9 +1,9 @@
 <?php
 
-namespace Skywatch\Laravel;
+namespace FaultScope\Laravel;
 
-use Skywatch\Laravel\Commands\FlushOfflineCommand;
-use Skywatch\Laravel\Commands\TestSkywatchCommand;
+use FaultScope\Laravel\Commands\FlushOfflineCommand;
+use FaultScope\Laravel\Commands\TestFaultScopeCommand;
 use Illuminate\Cache\Events\CacheHit;
 use Illuminate\Cache\Events\CacheMiss;
 use Illuminate\Cache\Events\KeyForgotten;
@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Throwable;
 
-class SkywatchServiceProvider extends ServiceProvider
+class FaultScopeServiceProvider extends ServiceProvider
 {
     /**
      * Register any application services.
@@ -27,11 +27,11 @@ class SkywatchServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(
-            __DIR__.'/../config/skywatch.php', 'skywatch'
+            __DIR__.'/../config/faultscope.php', 'faultscope'
         );
 
-        $this->app->singleton('skywatch', function () {
-            return new SkywatchClient;
+        $this->app->singleton('faultscope', function () {
+            return new FaultScopeClient;
         });
     }
 
@@ -40,25 +40,22 @@ class SkywatchServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Publish configuration
         if ($this->app->runningInConsole()) {
             $this->publishes([
-                __DIR__.'/../config/skywatch.php' => config_path('skywatch.php'),
-            ], 'skywatch-config');
+                __DIR__.'/../config/faultscope.php' => config_path('faultscope.php'),
+            ], 'faultscope-config');
 
             $this->commands([
-                TestSkywatchCommand::class,
+                TestFaultScopeCommand::class,
                 FlushOfflineCommand::class,
             ]);
         }
 
-        // Register Breadcrumb Listeners
-        if (config('skywatch.breadcrumbs.enabled', true)) {
-            // DB Queries
-            if (config('skywatch.breadcrumbs.sql', true)) {
+        if (config('faultscope.breadcrumbs.enabled', true)) {
+            if (config('faultscope.breadcrumbs.sql', true)) {
                 try {
                     DB::listen(function ($query) {
-                        SkywatchClient::recordBreadcrumb(
+                        FaultScopeClient::recordBreadcrumb(
                             'sql',
                             $query->sql,
                             'info',
@@ -72,8 +69,7 @@ class SkywatchServiceProvider extends ServiceProvider
                 }
             }
 
-            // App logs
-            if (config('skywatch.breadcrumbs.logs', true)) {
+            if (config('faultscope.breadcrumbs.logs', true)) {
                 try {
                     $this->app->make('log')->listen(function (...$args) {
                         if (count($args) === 1 && is_object($args[0])) {
@@ -86,10 +82,10 @@ class SkywatchServiceProvider extends ServiceProvider
                             $context = $args[2] ?? [];
                         }
 
-                        if (str_contains(is_string($message) ? $message : '', 'Skywatch')) {
+                        if (str_contains(is_string($message) ? $message : '', 'faultscope')) {
                             return;
                         }
-                        SkywatchClient::recordBreadcrumb(
+                        FaultScopeClient::recordBreadcrumb(
                             'log',
                             is_string($message) ? $message : json_encode($message),
                             is_string($level) ? $level : 'info',
@@ -100,8 +96,7 @@ class SkywatchServiceProvider extends ServiceProvider
                 }
             }
 
-            // Cache Operations
-            if (config('skywatch.breadcrumbs.cache', true)) {
+            if (config('faultscope.breadcrumbs.cache', true)) {
                 try {
                     Event::listen([
                         CacheHit::class,
@@ -122,7 +117,7 @@ class SkywatchServiceProvider extends ServiceProvider
                             $message = "Cache key forgotten: {$event->key}";
                         }
                         if ($message) {
-                            SkywatchClient::recordBreadcrumb(
+                            FaultScopeClient::recordBreadcrumb(
                                 'cache',
                                 $message,
                                 'info',
@@ -134,18 +129,17 @@ class SkywatchServiceProvider extends ServiceProvider
                 }
             }
 
-            // HTTP Client requests
-            if (config('skywatch.breadcrumbs.http', true)) {
+            if (config('faultscope.breadcrumbs.http', true)) {
                 try {
                     Event::listen(ConnectionFailed::class, function ($event) {
-                        SkywatchClient::recordBreadcrumb(
+                        FaultScopeClient::recordBreadcrumb(
                             'http',
                             "Failed request: {$event->request->method()} {$event->request->url()}",
                             'error'
                         );
                     });
                     Event::listen(ResponseReceived::class, function ($event) {
-                        SkywatchClient::recordBreadcrumb(
+                        FaultScopeClient::recordBreadcrumb(
                             'http',
                             "Sent request: {$event->request->method()} {$event->request->url()}",
                             'info',
@@ -158,10 +152,9 @@ class SkywatchServiceProvider extends ServiceProvider
                 }
             }
 
-            // Queue job context (for exceptions thrown inside workers)
             try {
                 Event::listen(JobProcessing::class, function (JobProcessing $event) {
-                    SkywatchClient::$currentJob = [
+                    FaultScopeClient::$currentJob = [
                         'name' => $event->job->resolveName(),
                         'queue' => $event->job->getQueue(),
                         'connection' => $event->connectionName ?? null,
@@ -170,32 +163,31 @@ class SkywatchServiceProvider extends ServiceProvider
                     ];
                 });
                 Event::listen([JobProcessed::class, JobFailed::class], function () {
-                    SkywatchClient::$currentJob = null;
+                    FaultScopeClient::$currentJob = null;
                 });
             } catch (Throwable $e) {
             }
         }
 
-        // Hook into the exception handler to report errors
         if ($this->app->bound(ExceptionHandler::class)) {
             $handler = $this->app->make(ExceptionHandler::class);
 
             if (method_exists($handler, 'reportable')) {
                 $handler->reportable(function (Throwable $e) {
-                    $this->app->make('skywatch')->capture($e);
+                    $this->app->make('faultscope')->capture($e);
                 });
             }
         }
 
-        if (! $this->app->runningInConsole() && config('skywatch.tracing.enabled', true)) {
+        if (! $this->app->runningInConsole() && config('faultscope.tracing.enabled', true)) {
             $this->app->make(\Illuminate\Contracts\Http\Kernel::class)
-                ->pushMiddleware(\Skywatch\Laravel\Http\Middleware\TraceSpanMiddleware::class);
+                ->pushMiddleware(\FaultScope\Laravel\Http\Middleware\TraceSpanMiddleware::class);
         }
 
-        if (config('skywatch.logs.ship', false)) {
+        if (config('faultscope.logs.ship', false)) {
             \Illuminate\Support\Facades\Log::listen(function ($message) {
                 try {
-                    app(SkywatchClient::class)->shipLog(
+                    app(FaultScopeClient::class)->shipLog(
                         strtolower($message->level),
                         (string) $message->message,
                         $message->context ?? []

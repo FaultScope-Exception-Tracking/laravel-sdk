@@ -45,11 +45,18 @@ class FaultScopeServiceProvider extends ServiceProvider
                 __DIR__.'/../config/faultscope.php' => config_path('faultscope.php'),
             ], 'faultscope-config');
 
+            $this->publishes([
+                __DIR__.'/../resources/js' => public_path('vendor/faultscope'),
+            ], 'faultscope-assets');
+
             $this->commands([
                 TestFaultScopeCommand::class,
                 FlushOfflineCommand::class,
             ]);
         }
+
+        $this->registerBladeDirectives();
+
 
         if (config('faultscope.breadcrumbs.enabled', true)) {
             if (config('faultscope.breadcrumbs.sql', true)) {
@@ -179,9 +186,18 @@ class FaultScopeServiceProvider extends ServiceProvider
             }
         }
 
-        if (! $this->app->runningInConsole() && config('faultscope.tracing.enabled', true)) {
-            $this->app->make(\Illuminate\Contracts\Http\Kernel::class)
-                ->pushMiddleware(\FaultScope\Laravel\Http\Middleware\TraceSpanMiddleware::class);
+        if (! $this->app->runningInConsole()) {
+            if ($this->app->bound(\Illuminate\Contracts\Http\Kernel::class)) {
+                $kernel = $this->app->make(\Illuminate\Contracts\Http\Kernel::class);
+
+                if (config('faultscope.tracing.enabled', true)) {
+                    $kernel->pushMiddleware(\FaultScope\Laravel\Http\Middleware\TraceSpanMiddleware::class);
+                }
+
+                if (config('faultscope.javascript.auto_inject', false)) {
+                    $kernel->pushMiddleware(\FaultScope\Laravel\Http\Middleware\InjectFaultScopeJsMiddleware::class);
+                }
+            }
         }
 
         if (config('faultscope.logs.ship', false)) {
@@ -197,4 +213,33 @@ class FaultScopeServiceProvider extends ServiceProvider
             });
         }
     }
+
+    /**
+     * Register FaultScope Blade directives.
+     */
+    protected function registerBladeDirectives(): void
+    {
+        $registrar = function ($blade) {
+            $blade->directive('faultscopeScripts', function (string $expression = '') {
+                $expression = trim($expression);
+                $args = $expression !== '' ? $expression : '[]';
+
+                return "<?php echo \\FaultScope\\Laravel\\FaultScopeClient::renderJsScripts({$args}); ?>";
+            });
+
+            $blade->directive('faultscopeHead', function (string $expression = '') {
+                $expression = trim($expression);
+                $args = $expression !== '' ? $expression : '[]';
+
+                return "<?php echo \\FaultScope\\Laravel\\FaultScopeClient::renderJsScripts({$args}); ?>";
+            });
+        };
+
+        if ($this->app->bound('blade.compiler')) {
+            $registrar($this->app->make('blade.compiler'));
+        } else {
+            $this->app->afterResolving('blade.compiler', $registrar);
+        }
+    }
 }
+

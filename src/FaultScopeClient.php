@@ -10,7 +10,7 @@ use Throwable;
 
 class FaultScopeClient
 {
-    public const SDK_VERSION = '1.3.0';
+    public const SDK_VERSION = '1.4.0';
 
     protected ?string $dsn;
 
@@ -929,4 +929,180 @@ class FaultScopeClient
         } catch (\Throwable) {
         }
     }
+
+    /**
+     * Safely resolve environment variable.
+     */
+    protected static function safeEnv(string $key, mixed $default = null): mixed
+    {
+        if (function_exists('env')) {
+            return env($key, $default);
+        }
+        $val = getenv($key);
+
+        return $val !== false ? $val : $default;
+    }
+
+    /**
+     * Safely resolve config value without throwing if container is unbooted.
+     */
+    protected static function safeConfig(string $key, mixed $default = null): mixed
+    {
+        try {
+            if (function_exists('config') && function_exists('app')) {
+                $app = app();
+                if ($app instanceof \Illuminate\Contracts\Container\Container && $app->bound('config')) {
+                    return config($key, $default);
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return $default;
+    }
+
+    /**
+     * Resolve the base URL of the FaultScope hub from the DSN.
+     */
+    public static function resolveHubBaseUrl(?string $dsn = null): string
+    {
+        $dsn = $dsn ?: (self::safeConfig('faultscope.dsn') ?: self::safeEnv('FAULTSCOPE_DSN', ''));
+        if (! $dsn) {
+            return (string) (self::safeConfig('app.url') ?: self::safeEnv('APP_URL', ''));
+        }
+
+        $parsed = parse_url($dsn);
+        if (! isset($parsed['host'])) {
+            return rtrim($dsn, '/');
+        }
+
+        $scheme = $parsed['scheme'] ?? 'https';
+        $host = $parsed['host'];
+        $port = isset($parsed['port']) ? ':'.$parsed['port'] : '';
+
+        return "{$scheme}://{$host}{$port}";
+    }
+
+    /**
+     * Resolve the URL for the hosted/published JavaScript SDK bundle.
+     */
+    public static function resolveJsScriptUrl(?string $explicitUrl = null, ?string $dsn = null): string
+    {
+        if ($explicitUrl) {
+            return $explicitUrl;
+        }
+
+        $configUrl = self::safeConfig('faultscope.javascript.script_url') ?: self::safeEnv('FAULTSCOPE_JS_URL');
+        if ($configUrl) {
+            return $configUrl;
+        }
+
+        try {
+            if (function_exists('public_path') && file_exists(public_path('vendor/faultscope/faultscope.js'))) {
+                return function_exists('asset') ? asset('vendor/faultscope/faultscope.js') : '/vendor/faultscope/faultscope.js';
+            }
+        } catch (\Throwable) {
+        }
+
+        $hubBase = self::resolveHubBaseUrl($dsn);
+
+        return rtrim($hubBase, '/').'/sdk/faultscope.js';
+    }
+
+
+    /**
+     * Prepare configuration payload for the JavaScript SDK.
+     */
+    public static function getJsConfig(array $overrides = []): array
+    {
+        $key = $overrides['key'] ?? self::safeConfig('faultscope.key') ?? self::safeEnv('FAULTSCOPE_KEY');
+        $dsn = $overrides['dsn'] ?? self::safeConfig('faultscope.dsn') ?? self::safeEnv('FAULTSCOPE_DSN');
+
+        $userId = null;
+        if (isset($overrides['userId'])) {
+            $userId = (string) $overrides['userId'];
+        } elseif (isset(self::$userContext['id'])) {
+            $userId = (string) self::$userContext['id'];
+        } elseif (function_exists('auth')) {
+            try {
+                if (auth()->check()) {
+                    $userId = (string) auth()->id();
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        $environment = $overrides['environment'] ?? null;
+        if (! $environment) {
+            try {
+                $environment = function_exists('app') && app()->bound('env') ? app()->environment() : self::safeEnv('APP_ENV', 'production');
+            } catch (\Throwable) {
+                $environment = self::safeEnv('APP_ENV', 'production');
+            }
+        }
+
+        $clientConfig = [
+            'dsn' => $dsn,
+            'apiKey' => $key,
+            'environment' => $environment,
+            'release' => $overrides['release'] ?? self::safeConfig('faultscope.release') ?? self::safeEnv('FAULTSCOPE_RELEASE'),
+            'enableTracing' => (bool) ($overrides['tracing'] ?? self::safeConfig('faultscope.javascript.tracing', false)),
+            'enableReplay' => (bool) ($overrides['replay'] ?? self::safeConfig('faultscope.javascript.replay', false)),
+            'replaySampleRate' => (float) ($overrides['replay_sample_rate'] ?? self::safeConfig('faultscope.javascript.replay_sample_rate', 0.1)),
+        ];
+
+
+        if ($userId !== null && $userId !== '') {
+            $clientConfig['userId'] = $userId;
+        }
+
+        if (! empty($overrides['options']) && is_array($overrides['options'])) {
+            $clientConfig = array_merge($clientConfig, $overrides['options']);
+        }
+
+        return array_filter($clientConfig, fn ($v) => $v !== null);
+    }
+
+    /**
+     * Render the JavaScript tracking script tags for Blade templates or HTML responses.
+     */
+    public static function renderJsScripts(array $overrides = []): string
+    {
+        $enabled = self::safeConfig('faultscope.enabled', true) && self::safeConfig('faultscope.javascript.enabled', true);
+
+        if (! $enabled) {
+            return "<!-- FaultScope JavaScript tracking disabled -->\n";
+        }
+
+        $config = self::getJsConfig($overrides);
+        if (empty($config['apiKey']) || empty($config['dsn'])) {
+            return "<!-- FaultScope JavaScript: apiKey or dsn not configured -->\n";
+        }
+
+        $scriptUrl = self::resolveJsScriptUrl($overrides['script_url'] ?? null, $config['dsn'] ?? null);
+        $encodedConfig = json_encode($config, JSON_UNESCAPED_SLASHES);
+
+
+        $nonce = $overrides['nonce'] ?? null;
+        if (! $nonce && function_exists('csp_nonce')) {
+            try {
+                $nonce = csp_nonce();
+            } catch (\Throwable) {
+            }
+        }
+        $nonceAttr = $nonce ? ' nonce="'.htmlspecialchars($nonce, ENT_QUOTES, 'UTF-8').'"' : '';
+
+        return <<<HTML
+<script src="{$scriptUrl}"{$nonceAttr}></script>
+<script{$nonceAttr}>
+(function() {
+    if (window.FaultScope) {
+        window.FaultScope.init({$encodedConfig});
+    }
+})();
+</script>
+HTML;
+    }
 }
+
+

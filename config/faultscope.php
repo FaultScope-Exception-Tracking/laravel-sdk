@@ -89,4 +89,14 @@ return [
         'ship' => ConfigHelpers::bool(env('FAULTSCOPE_SHIP_LOGS'), false),
     ],
 
+    'javascript' => [
+        'enabled' => ConfigHelpers::bool(env('FAULTSCOPE_JS_ENABLED'), true),
+        'script_url' => env('FAULTSCOPE_JS_URL'),
+        'auto_inject' => ConfigHelpers::bool(env('FAULTSCOPE_JS_AUTO_INJECT'), false),
+        'tracing' => ConfigHelpers::bool(env('FAULTSCOPE_JS_TRACING'), false),
+        'replay' => ConfigHelpers::bool(env('FAULTSCOPE_JS_REPLAY'), false),
+        'replay_sample_rate' => (float) env('FAULTSCOPE_JS_REPLAY_SAMPLE_RATE', 0.1),
+    ],
+
 ];
+

@@ -1,7 +1,6 @@
 {
     "name": "faultscope/laravel",
     "description": "Laravel integration package for FaultScope monitoring hub",
-    "version": "1.4.0",
     "type": "library",
     "license": "MIT",
     "keywords": ["laravel", "faultscope", "exceptions", "monitoring", "error-tracking"],
